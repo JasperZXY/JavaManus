@@ -6,15 +6,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.jasperzxy.javamanus.exception.ToolError;
 
 /**
  * 文件查看/创建/编辑工具。
  * 对应 OpenManus 的 StrReplaceEditor，支持 view/create/str_replace/insert/undo_edit。
+ * <p>
+ * 安全：所有操作路径被限制在 {@code workspaceRoot} 目录内，禁止越权访问。
  */
 public class StrReplaceEditor extends BaseTool {
 
@@ -42,9 +44,14 @@ public class StrReplaceEditor extends BaseTool {
             "You should retry this tool after you have searched inside the file with `grep -n` " +
             "in order to find the line numbers of what you are looking for.</NOTE>";
 
-    private final Map<Path, Deque<String>> fileHistory = new HashMap<>();
+    private final Map<Path, Deque<String>> fileHistory = new ConcurrentHashMap<>();
+    private final Path workspaceRoot;
 
     public StrReplaceEditor() {
+        this(null);
+    }
+
+    public StrReplaceEditor(Path workspaceRoot) {
         super("str_replace_editor", DESCRIPTION, Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -81,6 +88,7 @@ public class StrReplaceEditor extends BaseTool {
                 ),
                 "required", List.of("command", "path")
         ));
+        this.workspaceRoot = workspaceRoot != null ? workspaceRoot.toAbsolutePath().normalize() : null;
     }
 
     @Override
@@ -95,6 +103,7 @@ public class StrReplaceEditor extends BaseTool {
         if (!path.isAbsolute()) {
             throw new ToolError("The path " + path + " is not an absolute path");
         }
+        checkWithinWorkspace(path);
 
         return switch (command) {
             case "view" -> view(path, args);
@@ -104,6 +113,20 @@ public class StrReplaceEditor extends BaseTool {
             case "undo_edit" -> undoEdit(path);
             default -> throw new ToolError("Unrecognized command: " + command);
         };
+    }
+
+    /**
+     * 校验路径是否在 workspaceRoot 内。若 workspaceRoot 为 null 则不限制。
+     */
+    private void checkWithinWorkspace(Path path) {
+        if (workspaceRoot == null) {
+            return;
+        }
+        Path normalized = path.toAbsolutePath().normalize();
+        if (!normalized.startsWith(workspaceRoot)) {
+            throw new ToolError("Access denied: path " + normalized
+                    + " is outside the workspace " + workspaceRoot);
+        }
     }
 
     private String view(Path path, Map<String, Object> args) {

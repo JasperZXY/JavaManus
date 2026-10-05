@@ -18,6 +18,8 @@ javamanus:
   max-steps: 20
   max-observe: 10000
   duplicate-threshold: 2
+  max-messages: 100
+  sse-timeout-seconds: 300
 
 logging:
   level:

@@ -44,7 +44,7 @@ public class ArkEmbeddingModel implements EmbeddingModel {
     public EmbeddingResponse call(EmbeddingRequest request) {
         List<Embedding> list = new ArrayList<>(request.getInstructions().size());
 
-        log.info("call input:" + JsonUtils.toJson(request));
+        log.debug("embedding call, input count: {}", request.getInstructions().size());
 
         for (int i = 0; i < request.getInstructions().size(); i++) {
             var ds = embed0(request.getInstructions().get(i));
@@ -53,7 +53,8 @@ public class ArkEmbeddingModel implements EmbeddingModel {
                 floats[j] = ds.get(j).floatValue();
             }
 
-            log.info("call len:{} floats:{}...", floats.length, Arrays.toString(floats).substring(0, 100));
+            log.trace("embedding result len:{}, first100:{}", floats.length,
+                    Arrays.toString(floats).substring(0, Math.min(100, Arrays.toString(floats).length())));
             list.add(new Embedding(floats, i));
         }
 

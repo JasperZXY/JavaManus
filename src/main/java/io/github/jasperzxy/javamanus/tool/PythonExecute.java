@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import io.github.jasperzxy.javamanus.exception.ToolError;
@@ -13,6 +14,7 @@ import io.github.jasperzxy.javamanus.exception.ToolError;
  * Python 代码执行工具。
  * 通过 ProcessBuilder 启动独立的 python3 进程执行代码，带超时保护。
  * 对应 OpenManus 的 PythonExecute。
+ * 使用独立线程异步读取输出流，waitFor 超时后强制销毁进程。
  */
 public class PythonExecute extends BaseTool {
 
@@ -67,13 +69,26 @@ public class PythonExecute extends BaseTool {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            // 异步读取输出流，避免阻塞 waitFor，确保超时机制生效
+            CompletableFuture<String> outputFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    return "";
+                }
+            });
+
             boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
 
             if (!finished) {
                 process.destroyForcibly();
-                return "Execution timeout after " + timeout + " seconds";
+                // 等待输出流读取完成（进程已被销毁，流会关闭）
+                String partialOutput = outputFuture.get(2, TimeUnit.SECONDS);
+                String prefix = partialOutput.isEmpty() ? "" : partialOutput + "\n";
+                return prefix + "Execution timeout after " + timeout + " seconds";
             }
+
+            String output = outputFuture.get(2, TimeUnit.SECONDS);
 
             int exitCode = process.exitValue();
             if (exitCode != 0) {
@@ -86,6 +101,8 @@ public class PythonExecute extends BaseTool {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ToolError("Python execution interrupted", e);
+        } catch (Exception e) {
+            throw new ToolError("Failed to read Python output: " + e.getMessage(), e);
         } finally {
             if (tempFile != null) {
                 try {

@@ -19,4 +19,10 @@ public class JavaManusProperties {
 
     /** 卡死检测：重复响应次数阈值 */
     private int duplicateThreshold = 2;
+
+    /** 记忆中保留的最大消息数 */
+    private int maxMessages = 100;
+
+    /** SSE 连接超时时间（秒） */
+    private int sseTimeoutSeconds = 300;
 }

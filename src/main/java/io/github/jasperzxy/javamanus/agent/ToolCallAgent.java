@@ -64,6 +64,8 @@ public abstract class ToolCallAgent extends ReActAgent {
             log.error("LLM call failed", e);
             fireError(e);
             memory.addMessage(new AssistantMessage("Error: " + e.getMessage()));
+            // LLM 调用失败，终止循环，避免无效重试浪费配额
+            state = AgentState.FINISHED;
             return false;
         }
 
@@ -85,7 +87,10 @@ public abstract class ToolCallAgent extends ReActAgent {
             return content != null && !content.isBlank();
         }
         if (toolChoice == ToolChoice.REQUIRED && toolCalls.isEmpty()) {
-            return true;
+            // 模型未按要求调用工具，注入提示后终止本步，由下一轮重试
+            nextStepPrompt = "You are required to call a tool. Please select and call an appropriate tool.";
+            log.warn("{} tool_choice=REQUIRED but no tool calls returned, injecting prompt", name);
+            return false;
         }
         if (toolChoice == ToolChoice.AUTO && toolCalls.isEmpty()) {
             return content != null && !content.isBlank();
@@ -96,9 +101,6 @@ public abstract class ToolCallAgent extends ReActAgent {
     @Override
     protected String act() {
         if (toolCalls == null || toolCalls.isEmpty()) {
-            if (toolChoice == ToolChoice.REQUIRED) {
-                throw new ToolError("Tool calls required but none provided");
-            }
             Message last = memory.getLast();
             return last != null ? last.getText() : "No content or commands to execute";
         }

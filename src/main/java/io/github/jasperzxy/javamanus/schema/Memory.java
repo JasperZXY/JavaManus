@@ -12,24 +12,35 @@ import org.springframework.ai.chat.messages.Message;
 public class Memory {
 
     private List<Message> messages = new ArrayList<>();
-    private int maxMessages = 100;
+    private int maxMessages;
 
     public Memory() {
+        this(100);
     }
 
     public Memory(int maxMessages) {
         this.maxMessages = maxMessages;
     }
 
+    public int getMaxMessages() {
+        return maxMessages;
+    }
+
+    public void setMaxMessages(int maxMessages) {
+        this.maxMessages = maxMessages;
+    }
+
     public synchronized void addMessage(Message message) {
         messages.add(message);
-        if (messages.size() > maxMessages) {
-            messages = new ArrayList<>(messages.subList(messages.size() - maxMessages, messages.size()));
-        }
+        trimIfNeeded();
     }
 
     public synchronized void addMessages(List<Message> msgs) {
         messages.addAll(msgs);
+        trimIfNeeded();
+    }
+
+    private void trimIfNeeded() {
         if (messages.size() > maxMessages) {
             messages = new ArrayList<>(messages.subList(messages.size() - maxMessages, messages.size()));
         }

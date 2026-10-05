@@ -1,6 +1,7 @@
 package io.github.jasperzxy.javamanus.config;
 
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
@@ -16,7 +17,7 @@ public class AgentConfig {
 
     @Bean
     @Scope("prototype")
-    public ManusAgent manusAgent(ChatModel arkChatModel, JavaManusProperties props) {
-        return new ManusAgent(arkChatModel, props);
+    public ManusAgent manusAgent(@Qualifier("arkChatModel") ChatModel chatModel, JavaManusProperties props) {
+        return new ManusAgent(chatModel, props);
     }
 }

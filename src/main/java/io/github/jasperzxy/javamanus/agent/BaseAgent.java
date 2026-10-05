@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 
@@ -141,6 +142,7 @@ public abstract class BaseAgent {
         } finally {
             state = AgentState.IDLE;
             currentStep = 0;
+            memory.clear();
         }
 
         String finalResult = String.join("\n", results);
@@ -154,23 +156,40 @@ public abstract class BaseAgent {
     protected abstract String step();
 
     /**
-     * 检测是否卡死（重复响应）。
+     * 检测是否卡死（连续重复的 assistant 响应）。
+     * 仅统计与最后一条 assistant 消息连续相同的次数，避免将历史中的偶发重复误判为卡死。
      */
     protected boolean isStuck() {
         List<Message> msgs = memory.getMessages();
         if (msgs.size() < 2) {
             return false;
         }
-        Message last = msgs.get(msgs.size() - 1);
+        // 找到最后一条 assistant 消息
+        int lastAssistantIdx = -1;
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            if (msgs.get(i).getMessageType() == MessageType.ASSISTANT) {
+                lastAssistantIdx = i;
+                break;
+            }
+        }
+        if (lastAssistantIdx < 0) {
+            return false;
+        }
+        Message last = msgs.get(lastAssistantIdx);
         if (last.getText() == null || last.getText().isBlank()) {
             return false;
         }
+        // 向前统计连续相同的 assistant 消息数量
         int duplicateCount = 0;
-        for (int i = msgs.size() - 2; i >= 0; i--) {
+        for (int i = lastAssistantIdx - 1; i >= 0; i--) {
             Message m = msgs.get(i);
-            if (m.getMessageType() == org.springframework.ai.chat.messages.MessageType.ASSISTANT
-                    && last.getText().equals(m.getText())) {
+            if (m.getMessageType() != MessageType.ASSISTANT) {
+                continue;
+            }
+            if (last.getText().equals(m.getText())) {
                 duplicateCount++;
+            } else {
+                break;
             }
         }
         return duplicateCount >= duplicateThreshold;

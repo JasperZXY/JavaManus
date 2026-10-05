@@ -1,5 +1,6 @@
 package io.github.jasperzxy.javamanus.agent;
 
+import java.nio.file.Path;
 import java.util.List;
 
 import org.springframework.ai.chat.model.ChatModel;
@@ -22,15 +23,20 @@ public class ManusAgent extends ToolCallAgent {
         super(chatModel, "Manus",
                 "A versatile agent that can solve various tasks using multiple tools");
 
+        Path workspaceRoot = props.getWorkspaceRoot() != null
+                ? Path.of(props.getWorkspaceRoot())
+                : null;
+
         this.systemPrompt = ManusPrompt.systemPrompt(props.getWorkspaceRoot());
         this.nextStepPrompt = ManusPrompt.NEXT_STEP_PROMPT;
         this.maxSteps = props.getMaxSteps();
         this.maxObserve = props.getMaxObserve();
         this.duplicateThreshold = props.getDuplicateThreshold();
+        this.memory.setMaxMessages(props.getMaxMessages());
 
         this.availableTools = new ToolCollection(
                 new PythonExecute(),
-                new StrReplaceEditor(),
+                new StrReplaceEditor(workspaceRoot),
                 new AskHuman(),
                 new Terminate()
         );

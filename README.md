@@ -26,7 +26,7 @@ src/main/java/io/github/jasperzxy/javamanus/
 ├── prompt/                        # 提示词
 ├── event/                         # 事件监听（供 SSE 推送）
 ├── exception/                     # 异常
-└── controller/                    # SSE 调试接口
+└── controller/                    # controller接口
 ```
 
 ## 内置工具
@@ -258,4 +258,3 @@ public ChatModel myChatModel() {
 ## 设计参考
 
 - [OpenManus](https://github.com/FoundationAgents/OpenManus)
-- 详细设计见 [DESIGN.md](./DESIGN.md)

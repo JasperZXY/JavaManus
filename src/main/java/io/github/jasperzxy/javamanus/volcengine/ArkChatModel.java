@@ -34,9 +34,11 @@ import com.volcengine.ark.runtime.model.completion.chat.ChatTool;
 import com.volcengine.ark.runtime.model.completion.chat.ChatToolCall;
 import com.volcengine.ark.runtime.service.ArkService;
 
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.ConnectionPool;
 import okhttp3.Dispatcher;
 
+@Slf4j
 public class ArkChatModel implements ChatModel {
 
     private final ArkProperties props;
@@ -70,7 +72,7 @@ public class ArkChatModel implements ChatModel {
 
     @Override
     public ChatResponse call(Prompt prompt) {
-        System.out.println("ark call prompt:" + JsonUtils.toJson(prompt));
+        log.debug("ark call prompt: {}", JsonUtils.toJson(prompt));
 
         List<ChatMessage> messagesForReqList = toArkMessages(prompt);
 
@@ -79,6 +81,10 @@ public class ArkChatModel implements ChatModel {
         ChatCompletionRequest.Builder reqBuilder = ChatCompletionRequest.builder()
                 .model(props.getChatModel())
                 .messages(messagesForReqList);
+
+        if (props.getTemperature() > 0) {
+            reqBuilder.temperature(props.getTemperature());
+        }
 
         if (!tools.isEmpty()) {
             reqBuilder.tools(tools);

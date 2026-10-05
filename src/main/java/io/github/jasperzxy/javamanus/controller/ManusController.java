@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import io.github.jasperzxy.javamanus.agent.ManusAgent;
+import io.github.jasperzxy.javamanus.config.JavaManusProperties;
 import io.github.jasperzxy.javamanus.event.AgentEventListener;
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,17 +34,28 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/manus")
 public class ManusController {
 
-    private static final long SSE_TIMEOUT = 5 * 60 * 1000L; // 5 分钟
-
     private final ObjectProvider<ManusAgent> manusAgentProvider;
+    private final JavaManusProperties props;
 
-    public ManusController(ObjectProvider<ManusAgent> manusAgentProvider) {
+    public ManusController(ObjectProvider<ManusAgent> manusAgentProvider, JavaManusProperties props) {
         this.manusAgentProvider = manusAgentProvider;
+        this.props = props;
     }
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@RequestBody ChatRequest request) {
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        long sseTimeout = props.getSseTimeoutSeconds() * 1000L;
+        SseEmitter emitter = new SseEmitter(sseTimeout);
+
+        String prompt = request != null ? request.getPrompt() : null;
+        if (prompt == null || prompt.isBlank()) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data("Parameter 'prompt' is required"));
+            } catch (IOException ignored) {
+            }
+            emitter.complete();
+            return emitter;
+        }
 
         ManusAgent agent = manusAgentProvider.getObject();
 
@@ -79,7 +91,7 @@ public class ManusController {
         // 虚拟线程执行 Agent，避免阻塞 Web 容器线程
         Thread.ofVirtual().start(() -> {
             try {
-                agent.run(request.getPrompt());
+                agent.run(prompt);
             } catch (Exception e) {
                 log.error("Agent execution failed", e);
                 try {
