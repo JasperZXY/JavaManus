@@ -1,0 +1,24 @@
+server:
+  port: 18080
+
+spring:
+  application:
+    name: javamanus
+  ai:
+    volcengine:
+      base-url: https://ark.cn-beijing.volces.com/api/v3
+      api-key: ark-todo
+      chat-model: deepseek-v4-flash-ga-260731
+      embedding-model: doubao-embedding-vision-251215
+      dimensions: 1024
+      temperature: 0.1
+
+javamanus:
+  workspace-root: /tmp/javamanus/workspace
+  max-steps: 20
+  max-observe: 10000
+  duplicate-threshold: 2
+
+logging:
+  level:
+    io.github.jasperzxy.javamanus: info

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 日志文件存放路径，可通过 -DLOG_PATH=xxx 或 application.yml 的 logging.file.path 覆盖 -->
+    <property name="LOG_PATH" value="${LOG_PATH:-./logs}"/>
+    <property name="APP_NAME" value="javamanus"/>
+    <property name="LOG_FILE" value="${LOG_PATH}/${APP_NAME}.log"/>
+
+    <!-- 控制台输出（带颜色） -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 文件输出（按大小滚动，单文件最大 100MB，保留 30 天，总大小不超过 3GB） -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- 历史日志文件名：javamanus.2026-10-05.0.log -->
+            <fileNamePattern>${LOG_PATH}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- 项目自身日志：info 级别 -->
+    <logger name="io.github.jasperzxy.javamanus" level="INFO"/>
+
+    <!-- 火山引擎 SDK 日志：warn 级别，避免刷屏 -->
+    <logger name="com.volcengine" level="WARN"/>
+
+    <!-- Spring AI 日志：info 级别 -->
+    <logger name="org.springframework.ai" level="INFO"/>
+
+    <!-- 根日志级别 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
