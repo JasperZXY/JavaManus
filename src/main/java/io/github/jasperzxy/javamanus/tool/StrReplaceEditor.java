@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+
 import io.github.jasperzxy.javamanus.exception.ToolError;
 
 /**
@@ -18,7 +21,7 @@ import io.github.jasperzxy.javamanus.exception.ToolError;
  * <p>
  * 安全：所有操作路径被限制在 {@code workspaceRoot} 目录内，禁止越权访问。
  */
-public class StrReplaceEditor extends BaseTool {
+public class StrReplaceEditor {
 
     private static final String DESCRIPTION = """
             Custom editing tool for viewing, creating and editing files
@@ -52,65 +55,35 @@ public class StrReplaceEditor extends BaseTool {
     }
 
     public StrReplaceEditor(Path workspaceRoot) {
-        super("str_replace_editor", DESCRIPTION, Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "command", Map.of(
-                                "description", "The commands to run. Allowed options are: `view`, `create`, `str_replace`, `insert`, `undo_edit`.",
-                                "enum", List.of("view", "create", "str_replace", "insert", "undo_edit"),
-                                "type", "string"
-                        ),
-                        "path", Map.of(
-                                "description", "Absolute path to file or directory.",
-                                "type", "string"
-                        ),
-                        "file_text", Map.of(
-                                "description", "Required parameter of `create` command, with the content of the file to be created.",
-                                "type", "string"
-                        ),
-                        "old_str", Map.of(
-                                "description", "Required parameter of `str_replace` command containing the string in `path` to replace.",
-                                "type", "string"
-                        ),
-                        "new_str", Map.of(
-                                "description", "Optional parameter of `str_replace` command containing the new string. " +
-                                        "Required parameter of `insert` command containing the string to insert.",
-                                "type", "string"
-                        ),
-                        "insert_line", Map.of(
-                                "description", "Required parameter of `insert` command. The `new_str` will be inserted AFTER the line `insert_line` of `path`.",
-                                "type", "integer"
-                        ),
-                        "view_range", Map.of(
-                                "description", "Optional parameter of `view` command. If provided, the file will be shown in the indicated line number range, e.g. [11, 12].",
-                                "type", "array"
-                        )
-                ),
-                "required", List.of("command", "path")
-        ));
         this.workspaceRoot = workspaceRoot != null ? workspaceRoot.toAbsolutePath().normalize() : null;
     }
 
-    @Override
-    public String execute(Map<String, Object> args) {
-        String command = strArg(args, "command");
-        String pathStr = strArg(args, "path");
-        if (command == null || pathStr == null) {
+    @Tool(name = "str_replace_editor", description = DESCRIPTION)
+    public String strReplaceEditor(
+            @ToolParam(description = "The commands to run. Allowed options are: `view`, `create`, `str_replace`, `insert`, `undo_edit`.", required = true) String command,
+            @ToolParam(description = "Absolute path to file or directory.", required = true) String path,
+            @ToolParam(description = "Required parameter of `create` command, with the content of the file to be created.", required = false) String fileText,
+            @ToolParam(description = "Required parameter of `str_replace` command containing the string in `path` to replace.", required = false) String oldStr,
+            @ToolParam(description = "Optional parameter of `str_replace` command containing the new string. Required parameter of `insert` command containing the string to insert.", required = false) String newStr,
+            @ToolParam(description = "Required parameter of `insert` command. The `new_str` will be inserted AFTER the line `insert_line` of `path`.", required = false) Integer insertLine,
+            @ToolParam(description = "Optional parameter of `view` command. If provided, the file will be shown in the indicated line number range, e.g. [11, 12].", required = false) List<Integer> viewRange) {
+
+        if (command == null || path == null) {
             throw new ToolError("Parameters 'command' and 'path' are required");
         }
 
-        Path path = Path.of(pathStr);
-        if (!path.isAbsolute()) {
-            throw new ToolError("The path " + path + " is not an absolute path");
+        Path filePath = Path.of(path);
+        if (!filePath.isAbsolute()) {
+            throw new ToolError("The path " + filePath + " is not an absolute path");
         }
-        checkWithinWorkspace(path);
+        checkWithinWorkspace(filePath);
 
         return switch (command) {
-            case "view" -> view(path, args);
-            case "create" -> create(path, args);
-            case "str_replace" -> strReplace(path, args);
-            case "insert" -> insert(path, args);
-            case "undo_edit" -> undoEdit(path);
+            case "view" -> view(filePath, viewRange);
+            case "create" -> create(filePath, fileText);
+            case "str_replace" -> strReplace(filePath, oldStr, newStr);
+            case "insert" -> insert(filePath, insertLine, newStr);
+            case "undo_edit" -> undoEdit(filePath);
             default -> throw new ToolError("Unrecognized command: " + command);
         };
     }
@@ -129,7 +102,7 @@ public class StrReplaceEditor extends BaseTool {
         }
     }
 
-    private String view(Path path, Map<String, Object> args) {
+    private String view(Path path, List<Integer> viewRange) {
         if (!Files.exists(path)) {
             throw new ToolError("The path " + path + " does not exist.");
         }
@@ -137,8 +110,7 @@ public class StrReplaceEditor extends BaseTool {
             if (Files.isDirectory(path)) {
                 return viewDirectory(path);
             }
-            List<Integer> range = rangeArg(args, "view_range");
-            return viewFile(path, range);
+            return viewFile(path, viewRange);
         } catch (IOException e) {
             throw new ToolError("Failed to view " + path + ": " + e.getMessage(), e);
         }
@@ -189,8 +161,7 @@ public class StrReplaceEditor extends BaseTool {
         return makeOutput(content, file.toString(), initLine);
     }
 
-    private String create(Path path, Map<String, Object> args) {
-        String fileText = strArg(args, "file_text");
+    private String create(Path path, String fileText) {
         if (fileText == null) {
             throw new ToolError("Parameter `file_text` is required for command: create");
         }
@@ -207,12 +178,10 @@ public class StrReplaceEditor extends BaseTool {
         }
     }
 
-    private String strReplace(Path path, Map<String, Object> args) {
-        String oldStr = strArg(args, "old_str");
+    private String strReplace(Path path, String oldStr, String newStr) {
         if (oldStr == null) {
             throw new ToolError("Parameter `old_str` is required for command: str_replace");
         }
-        String newStr = strArg(args, "new_str");
         if (newStr == null) newStr = "";
 
         if (!Files.exists(path)) {
@@ -246,13 +215,10 @@ public class StrReplaceEditor extends BaseTool {
         }
     }
 
-    private String insert(Path path, Map<String, Object> args) {
-        Object insertLineObj = args.get("insert_line");
-        if (insertLineObj == null) {
+    private String insert(Path path, Integer insertLine, String newStr) {
+        if (insertLine == null) {
             throw new ToolError("Parameter `insert_line` is required for command: insert");
         }
-        int insertLine = ((Number) insertLineObj).intValue();
-        String newStr = strArg(args, "new_str");
         if (newStr == null) {
             throw new ToolError("Parameter `new_str` is required for command: insert");
         }
@@ -326,19 +292,5 @@ public class StrReplaceEditor extends BaseTool {
             idx += sub.length();
         }
         return count;
-    }
-
-    private static String strArg(Map<String, Object> args, String key) {
-        Object v = args.get(key);
-        return v != null ? v.toString() : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Integer> rangeArg(Map<String, Object> args, String key) {
-        Object v = args.get(key);
-        if (v instanceof List<?> list) {
-            return list.stream().map(o -> ((Number) o).intValue()).toList();
-        }
-        return null;
     }
 }

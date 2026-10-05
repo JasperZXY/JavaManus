@@ -1,66 +1,62 @@
 package io.github.jasperzxy.javamanus.tool;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
+
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.ToolCallback;
 
 import io.github.jasperzxy.javamanus.exception.ToolError;
 
 /**
  * 工具集合，管理多个工具并提供调度能力。
  * 对应 OpenManus 的 ToolCollection。
+ * <p>
+ * 工具类使用 Spring AI 的 {@code @Tool} 注解定义方法，通过 {@link ToolCallbacks#fromToolObjects}
+ * 自动生成 {@link ToolCallback}（含 ToolDefinition + 参数绑定 + 异常包装）。
  */
 public class ToolCollection {
 
-    private final Map<String, BaseTool> toolMap = new LinkedHashMap<>();
+    private final ToolCallback[] callbacks;
+    private final Map<String, ToolCallback> callbackMap = new LinkedHashMap<>();
 
-    public ToolCollection(BaseTool... tools) {
-        for (BaseTool tool : tools) {
-            addTool(tool);
+    public ToolCollection(Object... toolObjects) {
+        this.callbacks = ToolCallbacks.from(toolObjects);
+        for (ToolCallback cb : this.callbacks) {
+            callbackMap.put(cb.getToolDefinition().name(), cb);
         }
     }
 
-    public ToolCollection addTool(BaseTool tool) {
-        if (toolMap.containsKey(tool.getName())) {
-            return this;
-        }
-        toolMap.put(tool.getName(), tool);
-        return this;
+    /**
+     * 获取所有 ToolCallback，用于传给 ChatModel 的 toolCallbacks 选项。
+     */
+    public ToolCallback[] getToolCallbacks() {
+        return callbacks;
     }
 
-    public ToolCollection addTools(BaseTool... tools) {
-        for (BaseTool tool : tools) {
-            addTool(tool);
-        }
-        return this;
-    }
-
-    public BaseTool getTool(String name) {
-        return toolMap.get(name);
-    }
-
-    public List<BaseTool> getTools() {
-        return new ArrayList<>(toolMap.values());
+    /**
+     * 按名称查找 ToolCallback。
+     */
+    public ToolCallback getCallback(String name) {
+        return callbackMap.get(name);
     }
 
     public boolean contains(String name) {
-        return toolMap.containsKey(name);
+        return callbackMap.containsKey(name);
     }
 
     /**
      * 执行指定工具。
      *
-     * @param name 工具名
-     * @param args 参数
-     * @return 工具输出
+     * @param name              工具名
+     * @param functionArguments LLM 返回的 JSON 参数字符串
+     * @return 工具输出文本（异常会被 Spring AI 的 ToolCallback 包装为 "Error: ..."）
      */
-    public String execute(String name, Map<String, Object> args) {
-        BaseTool tool = toolMap.get(name);
-        if (tool == null) {
+    public String execute(String name, String functionArguments) {
+        ToolCallback cb = callbackMap.get(name);
+        if (cb == null) {
             throw new ToolError("Unknown tool: " + name);
         }
-        return tool.execute(args != null ? args : new HashMap<>());
+        return cb.call(functionArguments);
     }
 }

@@ -51,7 +51,7 @@ public abstract class ToolCallAgent extends ReActAgent {
 
         // 构建工具调用选项（禁用内部自动执行）
         ToolCallingChatOptions options = DefaultToolCallingChatOptions.builder()
-                .toolCallbacks(availableTools.getTools().toArray(new org.springframework.ai.tool.ToolCallback[0]))
+                .toolCallbacks(availableTools.getToolCallbacks())
                 .internalToolExecutionEnabled(false)
                 .build();
 
@@ -108,6 +108,7 @@ public abstract class ToolCallAgent extends ReActAgent {
         List<String> results = new ArrayList<>();
         for (AssistantMessage.ToolCall tc : toolCalls) {
             String toolName = tc.name();
+            // 解析参数仅用于日志和事件，实际执行时把原始 JSON 字符串交给 ToolCallback
             Map<String, Object> args = parseArgs(tc.arguments());
 
             log.info("Activating tool: {} with args: {}", toolName, args);
@@ -115,7 +116,8 @@ public abstract class ToolCallAgent extends ReActAgent {
 
             String result;
             try {
-                result = availableTools.execute(toolName, args);
+                // 直接传 LLM 返回的 JSON 参数字符串，由 Spring AI 的 ToolCallback 负责参数绑定
+                result = availableTools.execute(toolName, tc.arguments());
             } catch (Exception e) {
                 log.error("Tool {} execution failed", toolName, e);
                 result = "Error: " + e.getMessage();

@@ -1,34 +1,21 @@
 package io.github.jasperzxy.javamanus.tool;
 
-import java.util.Map;
 import java.util.Scanner;
+
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 /**
  * 询问人类工具。
  * 对应 OpenManus 的 AskHuman。
  * SSE 模式下暂返回提示信息，CLI 模式下读控制台。
  */
-public class AskHuman extends BaseTool {
+public class AskHuman {
 
-    private static final String DESCRIPTION = "Use this tool to ask human for help.";
-
-    public AskHuman() {
-        super("ask_human", DESCRIPTION, Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "inquire", Map.of(
-                                "type", "string",
-                                "description", "The question you want to ask human."
-                        )
-                ),
-                "required", java.util.List.of("inquire")
-        ));
-    }
-
-    @Override
-    public String execute(Map<String, Object> args) {
-        Object inquire = args.get("inquire");
-        String question = inquire != null ? inquire.toString() : "";
+    @Tool(name = "ask_human", description = "Use this tool to ask human for help.")
+    public String askHuman(
+            @ToolParam(description = "The question you want to ask human.", required = true) String inquire) {
+        String question = inquire != null ? inquire : "";
 
         // CLI 模式：从控制台读取
         if (System.console() != null) {

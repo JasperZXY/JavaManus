@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import io.github.jasperzxy.javamanus.exception.ToolError;
 
@@ -16,7 +18,7 @@ import io.github.jasperzxy.javamanus.exception.ToolError;
  * 对应 OpenManus 的 PythonExecute。
  * 使用独立线程异步读取输出流，waitFor 超时后强制销毁进程。
  */
-public class PythonExecute extends BaseTool {
+public class PythonExecute {
 
     private static final String DESCRIPTION = """
             Executes Python code string. Note: Only print outputs are visible, \
@@ -29,36 +31,18 @@ public class PythonExecute extends BaseTool {
     }
 
     public PythonExecute(int defaultTimeoutSeconds) {
-        super("python_execute", DESCRIPTION, Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "code", Map.of(
-                                "type", "string",
-                                "description", "The Python code to execute."
-                        ),
-                        "timeout", Map.of(
-                                "type", "integer",
-                                "description", "Execution timeout in seconds."
-                        )
-                ),
-                "required", java.util.List.of("code")
-        ));
         this.defaultTimeoutSeconds = defaultTimeoutSeconds;
     }
 
-    @Override
-    public String execute(Map<String, Object> args) {
-        Object codeObj = args.get("code");
-        if (codeObj == null) {
+    @Tool(name = "python_execute", description = DESCRIPTION)
+    public String execute(
+            @ToolParam(description = "The Python code to execute.", required = true) String code,
+            @ToolParam(description = "Execution timeout in seconds.", required = false) Integer timeout) {
+        if (code == null || code.isBlank()) {
             throw new ToolError("Parameter 'code' is required");
         }
-        String code = codeObj.toString();
 
-        int timeout = defaultTimeoutSeconds;
-        Object timeoutObj = args.get("timeout");
-        if (timeoutObj instanceof Number) {
-            timeout = ((Number) timeoutObj).intValue();
-        }
+        int effectiveTimeout = timeout != null ? timeout : defaultTimeoutSeconds;
 
         Path tempFile = null;
         try {
@@ -78,14 +62,13 @@ public class PythonExecute extends BaseTool {
                 }
             });
 
-            boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
 
             if (!finished) {
                 process.destroyForcibly();
-                // 等待输出流读取完成（进程已被销毁，流会关闭）
                 String partialOutput = outputFuture.get(2, TimeUnit.SECONDS);
                 String prefix = partialOutput.isEmpty() ? "" : partialOutput + "\n";
-                return prefix + "Execution timeout after " + timeout + " seconds";
+                return prefix + "Execution timeout after " + effectiveTimeout + " seconds";
             }
 
             String output = outputFuture.get(2, TimeUnit.SECONDS);
